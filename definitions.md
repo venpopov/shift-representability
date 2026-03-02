@@ -4,7 +4,7 @@
 
 Let $X=\{X_1,X_2,\dots,X_k\}$ be a finite set of random variables defined on a common interval DF, which is well-defined for continuous strictly increasing CDFs.
 
-------------------------------------------------------------------------
+---
 
 ### Shift-representability
 
@@ -16,7 +16,7 @@ $$
 
 Equivalently, after transforming $Y_n=g(X_n)$, the set $Y = \{Y_1, \dots, Y_k\}$ belongs to a common shift family.
 
-------------------------------------------------------------------------
+---
 
 ### Transport maps
 
@@ -34,7 +34,7 @@ $$
 \psi_n := \psi_{n \to 1} = F_1^{-1}F_n.
 $$
 
-------------------------------------------------------------------------
+---
 
 ### Commutativity
 
@@ -43,3 +43,4 @@ Two functions $f$ and $g$ are said to be commutative if the order in which they 
 $$
 fg = gf
 $$
+
