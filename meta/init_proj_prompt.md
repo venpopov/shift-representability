@@ -14,3 +14,7 @@ For the initial implementation you should focus on the easier first case, but st
 - it should easy for the user to specify what distributions to include in a test, and to easily vary their parameters
 - they should be able to do this for quick individual tests for iterative development
 - they should also be able to batch test many distributions across a grid of parameters without having to do much additional scaffolding 
+- when user specify distributions, they might have to provide the pdf / cdf / invcdf for each. or maybe use package "distributional" which can put distribution objects invectors and then directly apply cdf() or quantile() to the distribution objects
+- think about the various analytical objects defined in the manuscript and what role they need to play in the solution
+
+Your ultimate role is that of the architecture designer, and you should strive for simple but general solutions that will make the project much easier to work with and maintain
