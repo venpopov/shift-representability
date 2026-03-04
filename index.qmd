@@ -1,0 +1,9 @@
+---
+title: "Shift Representability"
+---
+
+Numerical tools for testing whether a family of continuous random variables is
+**shift-representable** — i.e., whether a single strictly monotone transformation
+exists that maps all variables into a common location (shift) family.
+
+See the [notebooks](notebooks/01_introduction.qmd) for worked examples.

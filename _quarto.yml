@@ -1,0 +1,26 @@
+project:
+  type: website
+  output-dir: docs
+  execute-dir: project
+
+execute:
+  freeze: auto
+
+website:
+  title: "Shift Representability"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+  sidebar:
+    - title: "Notebooks"
+      contents:
+        - notebooks/01_introduction.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    embed-resources: false
