@@ -1,0 +1,184 @@
+---
+title: "Transport Invariance: Gamma Distribution Test"
+format: html
+---
+
+This notebook tests the transport-invariance identification algorithm using
+gamma distributions. Gamma CDFs with the same shape parameter are related by
+pure scaling of the rate, which makes them transport-invariant under the
+probability-scale transport maps. The algorithm should recover this: given two
+gamma exemplars with shared shape but different rates, a candidate gamma(shape,
+rate) should be found with the same shape as the exemplars and near-zero
+objective.
+
+```{r}
+#| label: init
+source("R/transport-invariance.R")
+```
+
+## Define exemplar gamma distributions
+
+We pick two gamma distributions with the same shape but different rates as our
+exemplars. The reference is exemplar 1.
+
+```{r}
+#| label: define-exemplars
+shape_true <- 3
+rate_1 <- 1
+rate_2 <- 2.5
+
+exemplar_cdfs <- list(
+  function(x) pgamma(x, shape = shape_true, rate = rate_1),
+  function(x) pgamma(x, shape = shape_true, rate = rate_2)
+)
+
+Q_1 <- function(u) qgamma(u, shape = shape_true, rate = rate_1)
+```
+
+## Visualize the exemplar CDFs and their transport map
+
+```{r}
+#| label: plot-exemplars
+x_grid <- seq(0.01, 10, length.out = 500)
+plot(x_grid, exemplar_cdfs[[1]](x_grid), type = "l", col = "blue", lwd = 2,
+     xlab = "x", ylab = "F(x)", main = "Exemplar Gamma CDFs")
+lines(x_grid, exemplar_cdfs[[2]](x_grid), col = "red", lwd = 2)
+legend("bottomright", legend = c(
+  sprintf("Gamma(%g, %g)", shape_true, rate_1),
+  sprintf("Gamma(%g, %g)", shape_true, rate_2)
+), col = c("blue", "red"), lwd = 2)
+```
+
+```{r}
+#| label: plot-transport
+u_grid <- seq(0.01, 0.99, length.out = 500)
+phi_2 <- exemplar_cdfs[[2]](Q_1(u_grid))
+
+plot(u_grid, phi_2, type = "l", col = "darkgreen", lwd = 2,
+     xlab = "u", ylab = expression(phi[2](u)),
+     main = "Probability-scale transport map")
+abline(0, 1, lty = 2, col = "gray")
+```
+
+## Search for the transport-invariant gamma member
+
+The candidate family is `Gamma(shape, rate)` with both parameters free. The
+algorithm should find that the shape must match the exemplars' shape, while the
+rate is unconstrained (any rate yields a valid invariant member).
+
+```{r}
+#| label: define-candidate-factory
+candidate_cdf_factory <- function(theta) {
+  s <- theta[1]
+  r <- theta[2]
+  function(x) pgamma(x, shape = s, rate = r)
+}
+```
+
+```{r}
+#| label: run-optimization
+result <- find_invariant_member(
+  exemplar_cdfs = exemplar_cdfs,
+  Q_1 = Q_1,
+  candidate_cdf_factory = candidate_cdf_factory,
+  theta_lower = c(1, 1),
+  theta_upper = c(20, 20),
+  n_starts = 30,
+  m = 2000,
+  eps = 1e-3
+)
+```
+
+## Results
+
+```{r}
+#| label: print-results
+cat("Best theta (shape, rate):", result$theta_star, "\n")
+cat("Objective value J(theta*):", result$objective, "\n")
+cat("True exemplar shape:", shape_true, "\n")
+cat("Recovered shape:", round(result$theta_star[1], 4), "\n")
+cat("Recovered rate:", round(result$theta_star[2], 4), "\n")
+cat("\nAll objectives across starts:\n")
+print(summary(result$all_objectives))
+```
+
+## Diagnostics
+
+### Objective landscape over shape (fixing rate at recovered value)
+
+We expect a clear minimum at the true shape.
+
+```{r}
+#| label: objective-profile-shape
+pre <- result$precomputed
+
+shape_grid <- seq(0.5, 8, length.out = 200)
+obj_shape <- vapply(shape_grid, function(s) {
+  compute_objective(
+    theta = c(s, result$theta_star[2]),
+    u_mesh = pre$u_mesh, x_mesh = pre$x_mesh,
+    phi_values = pre$phi_values,
+    exemplar_cdfs = exemplar_cdfs,
+    Q_1 = Q_1,
+    candidate_cdf_factory = candidate_cdf_factory
+  )
+}, numeric(1))
+
+plot(shape_grid, obj_shape, type = "l", lwd = 2,
+     xlab = "shape", ylab = "J(shape, rate*)",
+     main = "Objective profile over shape (rate fixed)")
+abline(v = shape_true, lty = 2, col = "red")
+legend("topright", "true shape", lty = 2, col = "red")
+```
+
+### Objective landscape over rate (fixing shape at recovered value)
+
+We expect the objective to be near zero for all rate values when shape matches.
+
+```{r}
+#| label: objective-profile-rate
+rate_grid <- seq(0.1, 10, length.out = 200)
+obj_rate <- vapply(rate_grid, function(r) {
+  compute_objective(
+    theta = c(result$theta_star[1], r),
+    u_mesh = pre$u_mesh, x_mesh = pre$x_mesh,
+    phi_values = pre$phi_values,
+    exemplar_cdfs = exemplar_cdfs,
+    Q_1 = Q_1,
+    candidate_cdf_factory = candidate_cdf_factory
+  )
+}, numeric(1))
+
+plot(rate_grid, obj_rate, type = "l", lwd = 2,
+     xlab = "rate", ylab = "J(shape*, rate)",
+     main = "Objective profile over rate (shape fixed at recovered)")
+```
+
+### Convergence across multi-starts
+
+```{r}
+#| label: convergence-summary
+theta_all <- do.call(rbind, lapply(result$all_results, function(r) r$par))
+colnames(theta_all) <- c("shape", "rate")
+
+cat("Recovered shape across all starts:\n")
+print(summary(theta_all[, "shape"]))
+cat("\nRecovered rate across all starts:\n")
+print(summary(theta_all[, "rate"]))
+
+cat("\nSD of recovered shapes:", sd(theta_all[, "shape"]), "\n")
+cat("SD of recovered rates:", sd(theta_all[, "rate"]), "\n")
+cat("\nNote: rate should vary (not unique), shape should be consistent.\n")
+```
+
+### Scatter of converged parameters
+
+```{r}
+#| label: scatter-starts
+plot(theta_all[, "shape"], theta_all[, "rate"],
+     pch = 19, col = adjustcolor("steelblue", 0.7),
+     xlab = "shape", ylab = "rate",
+     main = "Converged parameters across multi-starts")
+abline(v = shape_true, lty = 2, col = "red")
+legend("topright", "true shape", lty = 2, col = "red")
+```

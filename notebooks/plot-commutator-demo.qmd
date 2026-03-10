@@ -1,0 +1,206 @@
+---
+title: "Using `plot_commutator` to Diagnose Transport Invariance"
+format: html
+---
+
+`plot_commutator` visualizes the commutator residual
+$H_\theta \circ \phi_i(u) - \phi_i \circ H_\theta(u)$ as a function of $u$
+for each non-reference exemplar. When a candidate distribution is
+transport-invariant with respect to the exemplars, the residual is identically
+zero. Deviations from zero reveal which candidates violate invariance and how.
+
+```{r}
+#| label: init
+source("R/transport-invariance.R")
+```
+
+## Setup: gamma exemplars and candidate family
+
+We use two Gamma distributions with the same shape but different rates. Members
+of the family with matching shape are transport-invariant; members with
+mismatched shape are not.
+
+```{r}
+#| label: start
+exemplar_cdfs <- list(
+  function(x) pgamma(x, shape = 3, rate = 1),
+  function(x) pgamma(x, shape = 3, rate = 2.5)
+)
+Q_1 <- function(u) qgamma(u, shape = 3, rate = 1)
+
+candidate_cdf_factory <- function(theta) {
+  function(x) pgamma(x, shape = theta[1], rate = theta[2])
+}
+```
+
+## Correct shape: residuals near zero
+
+When the candidate has the same shape as the exemplars, it is
+transport-invariant regardless of the rate. The commutator residual should be
+flat at zero.
+
+```{r}
+#| label: correct-shape
+plot_commutator(c(3, 1.5), exemplar_cdfs, Q_1, candidate_cdf_factory,
+  main = "Correct shape (transport-invariant)")
+```
+
+Changing the rate while keeping the correct shape still yields zero residuals:
+
+```{r}
+#| label: correct-shape-other-rate
+plot_commutator(c(3, 5), exemplar_cdfs, Q_1, candidate_cdf_factory,
+  main = "Correct shape, different rate (still invariant)")
+```
+
+## Wrong shape: non-zero residuals
+
+When the candidate's shape parameter differs from the exemplars', the
+commutator is non-zero, indicating a violation of transport invariance.
+
+```{r}
+#| label: wrong-shape
+plot_commutator(c(5, 1.5), exemplar_cdfs, Q_1, candidate_cdf_factory,
+  main = "Wrong shape = 5 (not transport-invariant)")
+```
+
+A smaller deviation in shape produces smaller but still non-zero residuals:
+
+```{r}
+#| label: slight-mismatch
+plot_commutator(c(3.5, 1.5), exemplar_cdfs, Q_1, candidate_cdf_factory,
+  main = "Slight shape mismatch = 3.5")
+```
+
+## Comparing residual magnitude across shapes
+
+We can sweep over a range of shape values and plot the peak absolute residual
+to see how the violation grows with shape mismatch.
+
+```{r}
+#| label: residual-sweep
+shape_grid <- seq(1, 8, length.out = 50)
+pre <- precompute(exemplar_cdfs, Q_1, m = 1000, eps = 1e-3)
+
+max_residuals <- vapply(shape_grid, function(s) {
+  res <- compute_commutator(
+    theta = c(s, 1.5),
+    u_mesh = pre$u_mesh,
+    x_mesh = pre$x_mesh,
+    phi_values = pre$phi_values,
+    exemplar_cdfs = exemplar_cdfs,
+    Q_1 = Q_1,
+    candidate_cdf_factory = candidate_cdf_factory
+  )
+  max(abs(unlist(res)))
+}, numeric(1))
+
+plot(shape_grid, max_residuals, type = "l", lwd = 2,
+  xlab = "candidate shape", ylab = "max |commutator residual|",
+  main = "Residual magnitude vs. candidate shape")
+abline(v = 3, lty = 2, col = "red")
+legend("topright", "true shape = 3", lty = 2, col = "red")
+```
+
+## Multiple exemplars
+
+`plot_commutator` handles any number of non-reference exemplars. Each gets its
+own curve.
+
+```{r}
+#| label: three-exemplars
+exemplar_cdfs_3 <- list(
+  function(x) pgamma(x, shape = 3, rate = 1),
+  function(x) pgamma(x, shape = 3, rate = 2),
+  function(x) pgamma(x, shape = 3, rate = 4)
+)
+Q_1_3 <- function(u) qgamma(u, shape = 3, rate = 1)
+
+plot_commutator(c(3, 1), exemplar_cdfs_3, Q_1_3, candidate_cdf_factory,
+  main = "Three exemplars, correct shape")
+```
+
+```{r}
+#| label: three-exemplars-wrong
+plot_commutator(c(5, 1), exemplar_cdfs_3, Q_1_3, candidate_cdf_factory,
+  main = "Three exemplars, wrong shape")
+```
+
+
+### Tests
+
+
+```{r}
+#| label: three-exemplars2
+exemplar_cdfs_3 <- list(
+  function(x) pgamma(x, shape = 3, rate = 1),
+  function(x) pgamma(x, shape = 4, rate = 1.15)
+)
+Q_1_3 <- function(u) qgamma(u, shape = 3, rate = 1)
+
+plot_commutator(c(6,1.43), exemplar_cdfs_3, Q_1_3, candidate_cdf_factory,
+  main = "Three exemplars, correct shape")
+```
+
+## Objective heatmap
+
+`plot_objective_heatmap` evaluates the objective over a 2D parameter grid and
+displays a log-scaled heatmap with contour lines. The valley at shape = 3
+(spanning all rates) is clearly visible.
+
+```{r}
+#| label: heatmap
+
+exemplar_cdfs <- list(
+  function(x) pgamma(x, 1, 1),
+  function(x) pgamma(x, 2, 0.95)
+)
+candidate_cdf_factory <- function(theta) {
+  function(x) pgamma(x, theta[1], theta[2])
+}
+Q_1 <- function(x) qgamma(x, 1, 1)
+plot_objective_heatmap(
+  theta1_grid = seq(0.01, 10, length.out = 200),
+  theta2_grid = seq(0.4, 2, length.out = 200),
+  exemplar_cdfs = exemplar_cdfs,
+  Q_1 = Q_1,
+  candidate_cdf_factory = candidate_cdf_factory,
+  overlay = function() abline(v = 2.5, col = "black")
+)
+```
+
+```{r}
+exemplar_cdfs <- list(
+  function(x) pgamma(x, 1, 1),
+  function(x) pgamma(x, 1.1, 0.5)
+)
+candidate_cdf_factory <- function(theta) {
+  function(x) pgamma(x, theta[1], theta[2])
+}
+Q_1 <- function(x) qgamma(x, 1, 1)
+result <- find_invariant_member(
+  exemplar_cdfs = exemplar_cdfs,
+  Q_1 = Q_1,
+  candidate_cdf_factory = candidate_cdf_factory,
+  theta_lower = c(1.15,0.1),
+  theta_upper = c(40,20),
+  n_starts = 5,
+  m = 2000,
+  eps = 1e-4
+)
+str(result, digits = 10)
+print(result$theta_star, digits = 15)
+```
+
+```{r}
+exemplar_cdfs_3 <- list(
+  function(x) pgamma(x, shape = 1, rate = 1),
+  function(x) pgamma(x, shape = 1.1, rate = 0.9)
+)
+Q_1_3 <- function(u) qgamma(u, shape = 1, rate = 1)
+
+plot_commutator(c(10.2,0.1), exemplar_cdfs_3, Q_1_3, candidate_cdf_factory,
+  main = "Three exemplars, correct shape")
+```
+
+
